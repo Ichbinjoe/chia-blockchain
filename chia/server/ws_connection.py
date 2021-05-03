@@ -335,33 +335,34 @@ class WSChiaConnection:
         for message in messages:
             await self.outgoing_queue.put(message)
 
+    async def _wait_and_retry(self, msg: Message, queue: asyncio.Queue):
+        try:
+            await asyncio.sleep(1)
+            await queue.put(msg)
+        except Exception as e:
+            self.log.debug(f"Exception {e} while waiting to retry sending rate limited message")
+            return
+
     async def _send_message(self, message: Message):
         encoded: bytes = bytes(message)
         size = len(encoded)
         assert len(encoded) < (2 ** (LENGTH_BYTES * 8))
         if not self.outbound_rate_limiter.process_msg_and_check(message):
+            reason = "peer is localhost"
             if not is_localhost(self.peer_host):
-                self.log.debug(
-                    f"Rate limiting ourselves. message type: {ProtocolMessageTypes(message.type).name}, "
-                    f"peer: {self.peer_host}"
-                )
-
                 # TODO: fix this special case. This function has rate limits which are too low.
-                if ProtocolMessageTypes(message.type) != ProtocolMessageTypes.respond_peers:
-
-                    async def wait_and_retry(msg: Message, queue: asyncio.Queue):
-                        try:
-                            await asyncio.sleep(1)
-                            await queue.put(msg)
-                        except Exception as e:
-                            self.log.debug(f"Exception {e} while waiting to retry sending rate limited message")
-                            return
-
-                asyncio.create_task(wait_and_retry(message, self.outgoing_queue))
-                return
+                if ProtocolMessageTypes(message.type) == ProtocolMessageTypes.respond_peers:
+                    reason = "gossiping peers"
+                else:
+                    self.log.debug(
+                        f"Rate limiting ourselves. message type: {ProtocolMessageTypes(message.type).name}, "
+                        f"peer: {self.peer_host}"
+                    )
+                    asyncio.create_task(self._wait_and_retry(message, self.outgoing_queue))
+                    return
             else:
                 self.log.debug(
-                    f"Not rate limiting ourselves. message type: {ProtocolMessageTypes(message.type).name}, "
+                    f"Not rate limiting ourselves because {reason}. message type: {ProtocolMessageTypes(message.type).name}, "
                     f"peer: {self.peer_host}"
                 )
 
@@ -374,6 +375,7 @@ class WSChiaConnection:
             message: WSMessage = await self.ws.receive(30)
         except asyncio.TimeoutError:
             # self.ws._closed if we didn't receive a ping / pong
+
             if self.ws._closed:
                 asyncio.create_task(self.close())
                 await asyncio.sleep(3)

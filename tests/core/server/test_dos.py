@@ -245,6 +245,10 @@ class TestDos:
         await time_out_assert(15, is_banned)
 
     @pytest.mark.asyncio
+    async def test_rate_by_message_type(self, setup_two_nodes):
+        pass
+
+    @pytest.mark.asyncio
     async def test_spam_message_too_large(self, setup_two_nodes):
         nodes, _ = setup_two_nodes
         full_node_1, full_node_2 = nodes
