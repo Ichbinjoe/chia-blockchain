@@ -20,6 +20,18 @@ from chia.util.ints import uint8, uint32, uint64
 from chia.wallet.derive_keys import master_sk_to_local_sk
 
 
+from prometheus_client import Counter, Summary
+
+
+HANDSHAKE_LATENCY = Summary('chia_harvester_handshake_latency', 'Harvester handshake latency')
+HANDSHAKE_COUNT = Counter('chia_harvester_handshake_count', 'Harvester handshake count')
+SIGNAGE_POINT_LATENCY = Summary('chia_harvester_signage_point_latency', 'Harvester signage point latency')
+SIGNAGE_POINT_COUNT = Counter('chia_harvester_signage_point_count', 'Harvester signage point count')
+SIGNAGE_POINT_PROOF_COUNT = Counter('chia_harvester_signage_point_proof_count', 'Harvester signage point proof count')
+REQUEST_SIGNATURES_LATENCY = Summary('chia_harvester_request_signatures_latency', 'Harvester request signature latency')
+REQUEST_SIGNATURES_COUNT = Counter('chia_harvester_request_signatures_count', 'Harvester request signatures count')
+
+
 class HarvesterAPI:
     harvester: Harvester
 
@@ -30,6 +42,7 @@ class HarvesterAPI:
         self.harvester.state_changed_callback = callback
 
     @api_request
+    @HANDSHAKE_LATENCY.time()
     async def harvester_handshake(self, harvester_handshake: harvester_protocol.HarvesterHandshake):
         """
         Handshake between the harvester and farmer. The harvester receives the pool public keys,
@@ -41,12 +54,14 @@ class HarvesterAPI:
 
         await self.harvester.refresh_plots()
 
+        HANDSHAKE_COUNT.inc()
         if len(self.harvester.provers) == 0:
             self.harvester.log.warning("Not farming any plots on this harvester. Check your configuration.")
             return
 
     @peer_required
     @api_request
+    @SIGNAGE_POINT_LATENCY.time()
     async def new_signage_point_harvester(
         self, new_challenge: harvester_protocol.NewSignagePointHarvester, peer: WSChiaConnection
     ):
@@ -228,14 +243,18 @@ class HarvesterAPI:
             f" Found {total_proofs_found} proofs. Time: {time.time() - start:.5f} s. "
             f"Total {len(self.harvester.provers)} plots"
         )
+        SIGNAGE_POINT_COUNT.inc()
+        SIGNAGE_POINT_PROOF_COUNT.inc(total_proofs_found)
 
     @api_request
+    @REQUEST_SIGNATURES_LATENCY.time()
     async def request_signatures(self, request: harvester_protocol.RequestSignatures):
         """
         The farmer requests a signature on the header hash, for one of the proofs that we found.
         A signature is created on the header hash using the harvester private key. This can also
         be used for pooling.
         """
+        REQUEST_SIGNATURES_COUNT.inc()
         plot_filename = Path(request.plot_identifier[64:]).resolve()
         try:
             plot_info = self.harvester.provers[plot_filename]

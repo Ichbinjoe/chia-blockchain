@@ -28,6 +28,7 @@ class PlotInfo:
     plot_public_key: G1Element
     file_size: int
     time_modified: float
+    d: Path 
 
 
 def _get_filenames(directory: Path) -> List[Path]:
@@ -152,16 +153,16 @@ def load_plots(
     log.info(f'Searching directories {config_file["plot_directories"]}')
 
     plot_filenames: Dict[Path, List[Path]] = get_plot_filenames(config_file)
-    all_filenames: List[Path] = []
-    for paths in plot_filenames.values():
-        all_filenames += paths
+    all_filenames: List[Tuple[Path, Path]] = []
+    for (d, paths) in plot_filenames.items():
+        all_filenames += [(d, path) for path in paths]
     plot_ids: Set[bytes32] = set()
     plot_ids_lock = threading.Lock()
 
     if match_str is not None:
         log.info(f'Only loading plots that contain "{match_str}" in the file or directory name')
 
-    def process_file(filename: Path) -> Tuple[int, Dict]:
+    def process_file(directory: Path, filename: Path) -> Tuple[int, Dict]:
         new_provers: Dict[Path, PlotInfo] = {}
         nonlocal changed
         filename_str = str(filename)
@@ -249,6 +250,7 @@ def load_plots(
                     plot_public_key,
                     stat_info.st_size,
                     stat_info.st_mtime,
+                    directory,
                 )
 
                 changed = True

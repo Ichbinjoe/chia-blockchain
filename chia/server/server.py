@@ -14,6 +14,7 @@ from aiohttp.web_runner import TCPSite
 from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
+from prometheus_client import start_http_server
 
 from chia.protocols.protocol_message_types import ProtocolMessageTypes
 from chia.protocols.shared_protocol import protocol_version
@@ -145,6 +146,10 @@ class ChiaServer:
         self.banned_peers: Dict[str, float] = {}
         self.invalid_protocol_ban_seconds = 10
         self.api_exception_ban_seconds = 10
+
+        # hello darkness my old friend, i've come to write shitty code with you
+        # again to avoid when this gets broken by a merge
+        start_http_server(config.get("prometheus_port", 9101))
 
     def my_id(self) -> bytes32:
         """If node has public cert use that one for id, if not use private."""

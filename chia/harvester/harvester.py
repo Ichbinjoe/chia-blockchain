@@ -15,7 +15,12 @@ from chia.plotting.plot_tools import get_plot_directories as get_plot_directorie
 from chia.plotting.plot_tools import load_plots
 from chia.plotting.plot_tools import remove_plot_directory as remove_plot_directory_pt
 
+from prometheus_client import Gauge
+
 log = logging.getLogger(__name__)
+
+PLOT_INV_GAUGE = Gauge("chia_harvester_plot_inventory", "Plot inventory currently on the harvester", ["k", "plotdir"])
+PLOT_INV_SIZE_GAUGE = Gauge("chia_harvester_plot_inventory_size", "Plot inventory size currently on the harvester", ["k", "plotdir"])
 
 
 class Harvester:
@@ -114,6 +119,23 @@ class Harvester:
                     self.show_memo,
                     self.root_path,
                 )
+
+                # Count, size
+                dir_k_agg = {}
+                for prover in self.provers.values():
+                    k = (prover.d, prover.prover.get_size())
+                    (count, size) = dir_k_agg.get(k, (0, 0))
+                    count += 1
+                    size += prover.file_size
+                    dir_k_agg[k] = (count, size)
+
+                for (key, value) in dir_k_agg.items():
+                    (d, k) = key
+                    (count, size) = value
+
+                    PLOT_INV_GAUGE.labels(k, d).set(count)
+                    PLOT_INV_SIZE_GAUGE.labels(k, d).set(size)
+
         if changed:
             self._state_changed("plots")
 

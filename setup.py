@@ -23,6 +23,9 @@ dependencies = [
     "sortedcontainers==2.3.0",  # For maintaining sorted mempools
     "websockets==8.1.0",  # For use in wallet RPC and electron UI
     "click==7.1.2",  # For the CLI
+
+    # JOEJOEJOEJOEJOEJOEJOEJOEJOEJOE
+    "prometheus-client==0.10.1"
 ]
 
 upnp_dependencies = [
